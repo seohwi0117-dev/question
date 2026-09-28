@@ -65,6 +65,8 @@ def init_session_state():
         st.session_state.show_hint = False
     if 'game_over' not in st.session_state:
         st.session_state.game_over = False
+    if 'check_answer_flag' not in st.session_state:
+        st.session_state.check_answer_flag = False
 
 @st.cache_data
 def load_data():
@@ -137,26 +139,9 @@ def start_game(time_limit):
     st.session_state.end_time = time.time() + time_limit
 
 def submit_answer():
-    if not st.session_state.user_answer:
-        return
-
-    user_input = st.session_state.user_answer
-    current_q = st.session_state.questions[st.session_state.current_q_idx]
-    correct_answer = current_q['answer']
-    
-    if check_answer(user_input, correct_answer):
-        st.session_state.score += 1
-        st.success("정답입니다! 👏")
-        st.balloons()
-    else:
-        st.error(f"오답입니다! 정답은 '{correct_answer}' 였습니다. 🥲")
-    
-    # 상태 초기화 및 다음 문제로
-    time.sleep(1.5) # 메시지를 잠시 보여주기 위해 대기
-    st.session_state.current_q_idx += 1
-    st.session_state.hint_used_current_q = False
-    st.session_state.show_hint = False
-    st.session_state.user_answer = "" # 입력창 초기화
+    # 엔터키 입력 또는 제출 버튼 클릭 시 '정답 확인 동작' 플래그만 켭니다.
+    if st.session_state.user_answer:
+        st.session_state.check_answer_flag = True
 
 init_session_state()
 
@@ -220,6 +205,27 @@ elif st.session_state.game_started and not st.session_state.game_over:
         
     st.write("")
     
+    # --- 정답 체크 영역 (위젯 충돌 에러를 막기 위해 입력창 렌더링 전에 수행) ---
+    if st.session_state.get('check_answer_flag', False):
+        st.session_state.check_answer_flag = False
+        user_input = st.session_state.user_answer
+        correct_answer = current_q['answer']
+        
+        if check_answer(user_input, correct_answer):
+            st.session_state.score += 1
+            st.success("정답입니다! 👏")
+            st.balloons()
+        else:
+            st.error(f"오답입니다! 정답은 '{correct_answer}' 였습니다. 🥲")
+        
+        # 상태 초기화 및 다음 문제로
+        time.sleep(1.5) # 메시지를 잠시 보여주기 위해 대기
+        st.session_state.current_q_idx += 1
+        st.session_state.hint_used_current_q = False
+        st.session_state.show_hint = False
+        st.session_state.user_answer = "" # 에러 없이 안전하게 입력창 초기화
+        st.rerun()
+
     # 정답 입력 및 버튼 영역
     form_col, button_col = st.columns([3, 1])
     
@@ -230,11 +236,8 @@ elif st.session_state.game_started and not st.session_state.game_over:
     with button_col:
         st.write("") # 정렬용 공백
         st.write("")
-        # 제출 버튼 (text_input의 엔터와 같은 기능)
-        if st.button("정답 제출", use_container_width=True):
-            if st.session_state.user_answer:
-                submit_answer()
-                st.rerun()
+        # on_click 콜백을 사용하여 버튼 클릭 시 submit_answer 실행
+        st.button("정답 제출", on_click=submit_answer, use_container_width=True)
 
     st.write("")
     
