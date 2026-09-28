@@ -69,12 +69,20 @@ def init_session_state():
 @st.cache_data
 def load_data():
     try:
-        # question.csv 파일 로드 (예시 데이터를 기본으로 제공하거나 파일이 없을 경우 대비)
-        df = pd.read_csv('question.csv', encoding='utf-8')
+        # question.csv 파일 로드 (엑셀 저장 시 발생하는 BOM 문자 해결을 위해 utf-8-sig 사용)
+        df = pd.read_csv('question.csv', encoding='utf-8-sig')
+        
+        # 컬럼명 앞뒤 공백 제거 및 소문자 변환 (오타로 인한 에러 완벽 방지)
+        df.columns = df.columns.str.strip().str.lower()
+        
+        # 필수 컬럼(prefix, answer)이 제대로 있는지 확인
+        if 'prefix' not in df.columns or 'answer' not in df.columns:
+            raise ValueError("컬럼명 오류")
+            
         return df.to_dict('records')
-    except FileNotFoundError:
-        # 파일이 없을 경우 기본 속담 데이터 제공
-        st.warning("question.csv 파일을 찾을 수 없어 기본 데이터로 실행합니다.")
+    except (FileNotFoundError, ValueError) as e:
+        # 파일이 없거나 양식이 맞지 않을 경우 기본 속담 데이터 제공
+        st.warning("⚠️ question.csv 파일에 문제가 있어(파일 없음 또는 컬럼명 오류) 기본 데이터로 실행합니다.")
         return [
             {"prefix": "가는 날이", "answer": "장날이다"},
             {"prefix": "등잔 밑이", "answer": "어둡다"},
@@ -105,7 +113,7 @@ def get_chosung(text):
 def check_answer(user_input, correct_answer):
     # 특수문자 제거 및 공백 제거
     def normalize_text(text):
-        text = re.sub(r'[^가-힣a-zA-Z0-9]', '', text)
+        text = re.sub(r'[^가-힣a-zA-Z0-9]', '', str(text))
         return text
     
     normalized_input = normalize_text(user_input)
@@ -199,11 +207,13 @@ elif st.session_state.game_started and not st.session_state.game_over:
     # 현재 문제 표시
     current_q = st.session_state.questions[st.session_state.current_q_idx]
     
-    st.markdown(f"<div class='big-font'>{current_q['prefix']} ...</div>", unsafe_allow_html=True)
+    # 안전하게 출력 (문자열 강제 변환)
+    prefix_text = str(current_q.get('prefix', ''))
+    st.markdown(f"<div class='big-font'>{prefix_text} ...</div>", unsafe_allow_html=True)
     
     # 힌트 표시 영역
     if st.session_state.show_hint:
-        chosung_hint = get_chosung(current_q['answer'])
+        chosung_hint = get_chosung(str(current_q.get('answer', '')))
         st.markdown(f"<div class='hint-text'>힌트: {chosung_hint}</div>", unsafe_allow_html=True)
     else:
         st.write("") # 공간 차지용
